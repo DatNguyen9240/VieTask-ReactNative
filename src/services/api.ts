@@ -1,0 +1,59 @@
+/**
+ * VieTask backend API service.
+ * Connects to the NotificationApp backend for parsing Vietnamese text.
+ */
+
+// Change this to your backend IP/URL
+const API_URL = __DEV__
+  ? 'http://192.168.1.100:3000'   // TODO: replace with your LAN IP
+  : 'https://your-production-url.com';
+
+export interface ParsedTask {
+  title: string;
+  datetime_local: string;
+  remind_before_minutes: number;
+  repeat: string;
+  confidence: number;
+  need_clarification: boolean;
+  clarifying_question: string | null;
+  action: 'notify' | 'alarm' | 'open_app' | 'call';
+  action_label: string;
+  action_icon: string;
+  app_name: string | null;
+}
+
+export interface ParseResult {
+  tasks: ParsedTask[];
+  error?: string;
+}
+
+/** Parse Vietnamese text into structured tasks */
+export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh'): Promise<ParseResult> {
+  const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16).replace('T', ' ');
+
+  const res = await fetch(`${API_URL}/parse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, nowLocal, tz }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `Server error ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/** Health check */
+export async function checkHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(5000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Get the current API URL */
+export function getApiUrl() { return API_URL; }
