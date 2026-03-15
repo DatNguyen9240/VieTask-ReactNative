@@ -20,6 +20,24 @@ function AppContent() {
         console.log('[Notifications] Permission:', granted ? 'granted' : 'denied');
       });
     }
+    // Warm up Railway server (free tier sleeps after inactivity, cold start takes 30-60s)
+    const warmUp = async () => {
+      for (let i = 0; i < 3; i++) {
+        try {
+          const res = await fetch(
+            `${process.env.EXPO_PUBLIC_API_URL ?? 'https://vietask-production.up.railway.app'}/health`,
+            { signal: AbortSignal.timeout(60_000) }
+          );
+          if (res.ok) {
+            console.log('[API] Server ready ✓');
+            return;
+          }
+        } catch { /* ignore, retry */ }
+        console.log(`[API] Server waking up... (attempt ${i + 1}/3)`);
+        await new Promise(r => setTimeout(r, 10_000));
+      }
+    };
+    warmUp();
   }, []);
 
   return (

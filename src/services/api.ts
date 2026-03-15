@@ -31,11 +31,11 @@ export interface ParseResult {
 export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?: Record<string, string>): Promise<ParseResult> {
   const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16).replace('T', ' ');
 
-  const doFetch = () => fetch(`${API_URL}/parse`, {
+  const doFetch = (timeoutMs = 45_000) => fetch(`${API_URL}/parse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, nowLocal, tz, contacts }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   let res: Response;
