@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 
 import { HomeScreen } from '../screens/HomeScreen';
@@ -25,6 +26,7 @@ function TabIcon({ icon, focused, color }: { icon: string; focused: boolean; col
 
 function HomeTabs() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -34,8 +36,8 @@ function HomeTabs() {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
           borderTopWidth: StyleSheet.hairlineWidth,
-          height: 72,
-          paddingBottom: 10,
+          height: 72 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
           paddingTop: 10,
         },
         tabBarActiveTintColor: theme.colors.primary,
