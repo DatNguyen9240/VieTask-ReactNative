@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '../theme';
-import { Button, Input, TaskCard } from '../components';
+import { Button, Input, TaskCard, VoiceButton } from '../components';
 import { parseText, type ParsedTask } from '../services/api';
 import { useTaskStore } from '../store/taskStore';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -43,9 +43,9 @@ export function AddTaskScreen({ navigation }: Props) {
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!parsedTasks) return;
-    addTasks(parsedTasks);
+    await addTasks(parsedTasks);
     navigation.goBack();
   };
 
@@ -72,7 +72,7 @@ export function AddTaskScreen({ navigation }: Props) {
             Thêm việc mới
           </Text>
           <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
-            Nhập bằng tiếng Việt, AI sẽ tự hiểu
+            Nhập hoặc nói bằng tiếng Việt, AI sẽ tự hiểu
           </Text>
 
           <Input
@@ -81,6 +81,12 @@ export function AddTaskScreen({ navigation }: Props) {
             placeholder="Ví dụ: 8 giờ sáng báo thức..."
             multiline
             autoFocus
+            rightIcon={
+              <VoiceButton
+                onResult={(transcript) => setText(prev => prev ? prev + ' ' + transcript : transcript)}
+                onError={(err) => setError(err)}
+              />
+            }
           />
 
           <View style={styles.buttonRow}>
@@ -114,14 +120,14 @@ export function AddTaskScreen({ navigation }: Props) {
         )}
 
         {/* Error */}
-        {error && (
+        {error ? (
           <Animated.View
             entering={FadeInUp.duration(300)}
             style={[styles.errorBox, { backgroundColor: theme.colors.dangerLight, borderRadius: theme.radius.md }]}
           >
-            <Text style={[theme.typography.bodySmall, { color: theme.colors.danger }]}>❌ {error}</Text>
+            <Text style={[theme.typography.bodySmall, { color: theme.colors.danger }]}>{"❌ " + error}</Text>
           </Animated.View>
-        )}
+        ) : null}
 
         {/* Parsed Results */}
         {parsedTasks && (
@@ -144,7 +150,7 @@ export function AddTaskScreen({ navigation }: Props) {
             <View style={styles.buttonRow}>
               <Button title="Thử lại" variant="secondary" onPress={() => setParsedTasks(null)} style={{ flex: 1 }} />
               <View style={{ width: 12 }} />
-              <Button title="Xác nhận ✓" onPress={handleConfirm} style={{ flex: 1 }} />
+              <Button title={"Xác nhận \u2713"} onPress={handleConfirm} style={{ flex: 1 }} />
             </View>
           </Animated.View>
         )}

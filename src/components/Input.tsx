@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, type ViewStyle } from 'react-native';
+import { View, TextInput, StyleSheet, Platform, type ViewStyle } from 'react-native';
 import { useTheme } from '../theme';
 
 interface InputProps {
@@ -24,9 +24,9 @@ export function Input({ value, onChangeText, placeholder, multiline, leftIcon, r
         styles.container,
         {
           backgroundColor: theme.colors.surfaceSecondary,
-          borderRadius: theme.radius.md,
-          borderColor: focused ? theme.colors.primary : 'transparent',
-          borderWidth: 2,
+          borderRadius: theme.radius.lg,
+          borderColor: focused ? theme.colors.primary : theme.colors.border,
+          borderWidth: 1,
           minHeight: multiline ? 120 : 52,
         },
         style,
@@ -49,6 +49,7 @@ export function Input({ value, onChangeText, placeholder, multiline, leftIcon, r
           {
             color: theme.colors.text,
             textAlignVertical: multiline ? 'top' : 'center',
+            ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}),
           },
         ]}
       />
@@ -61,12 +62,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   input: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   iconLeft: { marginRight: 12 },
-  iconRight: { marginLeft: 12 },
+  iconRight: { marginLeft: 10 },
 });

@@ -3,10 +3,8 @@
  * Connects to the NotificationApp backend for parsing Vietnamese text.
  */
 
-// Change this to your backend IP/URL
-const API_URL = __DEV__
-  ? 'http://192.168.1.100:3000'   // TODO: replace with your LAN IP
-  : 'https://your-production-url.com';
+// Đọc từ .env: EXPO_PUBLIC_API_URL
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.100:3000';
 
 export interface ParsedTask {
   title: string;
@@ -19,6 +17,7 @@ export interface ParsedTask {
   action: 'notify' | 'alarm' | 'open_app' | 'call';
   action_label: string;
   action_icon: string;
+  action_url?: string | null;
   app_name: string | null;
 }
 

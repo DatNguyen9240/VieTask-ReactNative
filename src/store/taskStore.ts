@@ -1,30 +1,93 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ParsedTask } from '../services/api';
+import { scheduleTaskNotification, cancelNotification, cancelAllNotifications } from '../services/notifications';
 
-interface TaskStore {
-  /** All saved tasks */
-  tasks: ParsedTask[];
-
-  /** Add parsed tasks to the store */
-  addTasks: (newTasks: ParsedTask[]) => void;
-
-  /** Remove a task by index */
-  removeTask: (index: number) => void;
-
-  /** Clear all tasks */
-  clearTasks: () => void;
+/** Task with notification tracking */
+export interface StoredTask extends ParsedTask {
+  id: string;
+  notificationId: string | null;
+  createdAt: string;
+  completed: boolean;
+  reminded: boolean;
 }
 
-export const useTaskStore = create<TaskStore>((set) => ({
-  tasks: [],
+interface TaskStore {
+  tasks: StoredTask[];
+  addTasks: (newTasks: ParsedTask[]) => Promise<void>;
+  removeTask: (id: string) => Promise<void>;
+  completeTask: (id: string) => void;
+  markReminded: (id: string) => void;
+  clearTasks: () => Promise<void>;
+}
 
-  addTasks: (newTasks) => set((state) => ({
-    tasks: [...newTasks, ...state.tasks],
-  })),
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
 
-  removeTask: (index) => set((state) => ({
-    tasks: state.tasks.filter((_, i) => i !== index),
-  })),
+export const useTaskStore = create<TaskStore>()(
+  persist(
+    (set, get) => ({
+      tasks: [],
 
-  clearTasks: () => set({ tasks: [] }),
-}));
+      addTasks: async (newTasks) => {
+        const storedTasks: StoredTask[] = [];
+        for (const t of newTasks) {
+          const notificationId = await scheduleTaskNotification(
+            t.title,
+            t.datetime_local,
+            t.action_label,
+            t.action_icon,
+          );
+          storedTasks.push({
+            ...t,
+            id: generateId(),
+            notificationId,
+            createdAt: new Date().toISOString(),
+            completed: false,
+            reminded: false,
+          });
+        }
+        set((state) => ({
+          tasks: [...storedTasks, ...state.tasks],
+        }));
+      },
+
+      removeTask: async (id) => {
+        const task = get().tasks.find(t => t.id === id);
+        if (task?.notificationId) {
+          await cancelNotification(task.notificationId);
+        }
+        set((state) => ({
+          tasks: state.tasks.filter(t => t.id !== id),
+        }));
+      },
+
+      completeTask: (id) => {
+        set((state) => ({
+          tasks: state.tasks.map(t =>
+            t.id === id ? { ...t, completed: true, reminded: true } : t
+          ),
+        }));
+      },
+
+      markReminded: (id) => {
+        set((state) => ({
+          tasks: state.tasks.map(t =>
+            t.id === id ? { ...t, reminded: true } : t
+          ),
+        }));
+      },
+
+      clearTasks: async () => {
+        await cancelAllNotifications();
+        set({ tasks: [] });
+      },
+    }),
+    {
+      name: 'vietask-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

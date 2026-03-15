@@ -60,7 +60,7 @@ export function SettingsScreen() {
             <Text style={[theme.typography.body, { color: theme.colors.text }]}>📋  Tổng số việc</Text>
             <Text style={[theme.typography.body, { color: theme.colors.primary, fontWeight: '600' }]}>{taskCount}</Text>
           </View>
-          <Button title="Xóa tất cả" variant="danger" size="sm" onPress={clearTasks} style={{ marginTop: 12 }} />
+          <Button title="Xóa tất cả" variant="danger" size="sm" onPress={() => clearTasks()} style={{ marginTop: 12 }} />
         </View>
 
         {/* About */}

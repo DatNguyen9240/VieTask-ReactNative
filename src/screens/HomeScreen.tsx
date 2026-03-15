@@ -16,9 +16,10 @@ export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tasks = useTaskStore((s) => s.tasks);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
 
   const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const pendingTasks = tasks.filter(t => !t.completed);
+  const completedTasks = tasks.filter(t => t.completed);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -34,7 +35,7 @@ export function HomeScreen({ navigation }: Props) {
             {today}
           </Text>
           <Text style={[theme.typography.h1, { color: theme.colors.text, marginTop: 4 }]}>
-            Xin chào! 👋
+            {"Xin chào! 👋"}
           </Text>
         </View>
         <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
@@ -42,17 +43,15 @@ export function HomeScreen({ navigation }: Props) {
         </View>
       </Animated.View>
 
-      {/* Task Count */}
+      {/* Stats */}
       <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.statsRow}>
         <View style={[styles.statCard, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.md }]}>
-          <Text style={[theme.typography.h2, { color: theme.colors.primary }]}>{tasks.length}</Text>
-          <Text style={[theme.typography.caption, { color: theme.colors.primary }]}>Tổng việc</Text>
+          <Text style={[theme.typography.h2, { color: theme.colors.primary }]}>{pendingTasks.length}</Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.primary }]}>Chờ làm</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: theme.colors.successLight, borderRadius: theme.radius.md }]}>
-          <Text style={[theme.typography.h2, { color: theme.colors.success }]}>
-            {tasks.filter(t => t.action === 'alarm').length}
-          </Text>
-          <Text style={[theme.typography.caption, { color: theme.colors.success }]}>Báo thức</Text>
+          <Text style={[theme.typography.h2, { color: theme.colors.success }]}>{completedTasks.length}</Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.success }]}>Hoàn thành</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: theme.colors.accentLight, borderRadius: theme.radius.md }]}>
           <Text style={[theme.typography.h2, { color: theme.colors.accent }]}>
@@ -73,31 +72,25 @@ export function HomeScreen({ navigation }: Props) {
           DANH SÁCH VIỆC
         </Text>
 
-        {loading ? (
-          <>
-            <TaskCardSkeleton />
-            <TaskCardSkeleton />
-            <TaskCardSkeleton />
-          </>
-        ) : tasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.empty}>
-            <Text style={{ fontSize: 48 }}>📝</Text>
+            <Text style={{ fontSize: 48 }}>{"📝"}</Text>
             <Text style={[theme.typography.body, { color: theme.colors.textSecondary, marginTop: 12, textAlign: 'center' }]}>
-              Chưa có việc nào!{'\n'}Nhấn + để thêm việc mới
+              {"Chưa có việc nào!\nNhấn + để thêm việc mới"}
             </Text>
           </Animated.View>
         ) : (
           tasks.map((task, i) => (
             <TaskCard
-              key={`${task.title}-${task.datetime_local}-${i}`}
-              title={task.title}
+              key={task.id}
+              title={task.completed ? `✓ ${task.title}` : task.title}
               time={task.datetime_local}
               action={task.action}
               actionLabel={task.action_label}
               actionIcon={task.action_icon}
               clarifyQuestion={task.clarifying_question}
               index={i}
-              onPress={() => navigation.navigate('TaskDetail', { task, index: i })}
+              onPress={() => navigation.navigate('TaskDetail', { taskId: task.id })}
             />
           ))
         )}
