@@ -5,6 +5,7 @@
 
 // Đọc từ .env: EXPO_PUBLIC_API_URL
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://vietask-production.up.railway.app';
+console.log('[API] Using URL:', API_URL);
 
 export interface ParsedTask {
   title: string;
@@ -42,15 +43,21 @@ export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?
   try {
     res = await doFetch();
   } catch (e) {
+    // Log the error for debugging on Android builds
+    const firstErr = e instanceof Error ? e : new Error(String(e));
+    console.warn(`[API] First attempt failed: ${firstErr.name}: ${firstErr.message} (URL: ${API_URL}/parse)`);
+    // Wait before retry (helps with cold starts)
+    await new Promise(r => setTimeout(r, 2000));
     // Retry once on network/timeout error
     try {
       res = await doFetch();
     } catch (retryErr) {
       const err = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+      console.error(`[API] Retry also failed: ${err.name}: ${err.message}`);
       if (err.name === 'TimeoutError') {
         throw new Error('Server phản hồi quá lâu. Kiểm tra kết nối mạng.');
       }
-      throw new Error('Không thể kết nối server. Kiểm tra kết nối mạng.');
+      throw new Error(`Không thể kết nối server (${err.name}). Kiểm tra kết nối mạng.`);
     }
   }
 
