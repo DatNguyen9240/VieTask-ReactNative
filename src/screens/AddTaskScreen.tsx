@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '../theme';
@@ -9,6 +9,11 @@ import { useTaskStore } from '../store/taskStore';
 import { useShortcutStore } from '../store/contactStore';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
+
+interface ChatMessage {
+  role: 'user' | 'ai';
+  text: string;
+}
 
 interface Props {
   navigation: NativeStackNavigationProp<any>;
@@ -20,6 +25,7 @@ export function AddTaskScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const addTasks = useTaskStore((s) => s.addTasks);
   const getShortcutsMap = useShortcutStore((s) => s.getShortcutsMap);
+  const scrollRef = useRef<ScrollView>(null);
 
   const prefillTime = (route.params as any)?.prefillTime as string | undefined;
 
@@ -27,17 +33,55 @@ export function AddTaskScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[] | null>(null);
   const [error, setError] = useState('');
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [originalText, setOriginalText] = useState('');
 
-  const handleParse = async () => {
-    if (!text.trim()) return;
+  // Whether we're in clarification mode (waiting for user reply)
+  const needsClarification = parsedTasks?.some(t => t.need_clarification) ?? false;
+  const clarifyQuestions = parsedTasks
+    ?.filter(t => t.need_clarification && t.clarifying_question)
+    .map(t => t.clarifying_question!) ?? [];
+
+  // Auto-scroll to bottom when chat updates
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+    }
+  }, [chatHistory.length, parsedTasks]);
+
+  const handleParse = async (inputText?: string) => {
+    const sendText = (inputText ?? text).trim();
+    if (!sendText) return;
     setLoading(true);
     setError('');
-    setParsedTasks(null);
+
+    // If this is a clarification reply, combine with original text
+    const isReply = chatHistory.length > 0;
+    const fullText = isReply ? `${originalText}, ${sendText}` : sendText;
+
+    // Add user message to chat
+    setChatHistory(prev => [...prev, { role: 'user', text: sendText }]);
+    if (!isReply) setOriginalText(sendText);
+    setText('');
 
     try {
-      const result = await parseText(text.trim(), 'Asia/Ho_Chi_Minh', getShortcutsMap());
+      const result = await parseText(fullText, 'Asia/Ho_Chi_Minh', getShortcutsMap());
       if (result.tasks?.length) {
+        const hasClarify = result.tasks.some(t => t.need_clarification);
         setParsedTasks(result.tasks);
+
+        if (hasClarify) {
+          // AI needs more info → show questions as chat bubbles
+          const questions = result.tasks
+            .filter(t => t.need_clarification && t.clarifying_question)
+            .map(t => t.clarifying_question!);
+          if (questions.length > 0) {
+            setChatHistory(prev => [...prev, { role: 'ai', text: questions.join('\n') }]);
+          }
+          // Store combined text so far for next round
+          setOriginalText(fullText);
+        }
+        // else: all tasks are clear → show results for confirmation
       } else {
         setError(result.error || 'Không thể phân tích câu này');
       }
@@ -55,6 +99,14 @@ export function AddTaskScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
+  const handleReset = () => {
+    setParsedTasks(null);
+    setChatHistory([]);
+    setOriginalText('');
+    setText('');
+    setError('');
+  };
+
   const examples = [
     '8 giờ sáng báo thức',
     'Nhắc tôi uống thuốc lúc 7 rưỡi',
@@ -62,52 +114,143 @@ export function AddTaskScreen({ navigation, route }: Props) {
     '3 giờ chiều gọi cho khách hàng',
   ];
 
+  // Final tasks ready for confirmation (no clarification needed)
+  const tasksReady = parsedTasks && !needsClarification;
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Header — only show when no chat history */}
+        {chatHistory.length === 0 && (
+          <Animated.View entering={FadeInDown.duration(400)}>
+            <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 8 }]}>
+              Thêm việc mới
+            </Text>
+            <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
+              Nhập hoặc nói bằng tiếng Việt, AI sẽ tự hiểu
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Chat History */}
+        {chatHistory.map((msg, i) => (
+          <Animated.View
+            key={i}
+            entering={FadeInUp.duration(300)}
+            style={[
+              styles.chatBubble,
+              msg.role === 'user' ? styles.userBubble : styles.aiBubble,
+              {
+                backgroundColor: msg.role === 'user'
+                  ? theme.colors.primary
+                  : theme.colors.surface,
+                borderRadius: theme.radius.lg,
+              },
+              msg.role === 'ai' && theme.shadows.sm,
+            ]}
+          >
+            {msg.role === 'ai' && (
+              <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600', marginBottom: 4 }]}>
+                🤖 AI hỏi lại
+              </Text>
+            )}
+            <Text style={[
+              theme.typography.body,
+              { color: msg.role === 'user' ? '#fff' : theme.colors.text },
+            ]}>
+              {msg.text}
+            </Text>
+          </Animated.View>
+        ))}
+
+        {/* Quick-reply suggestions from BE */}
+        {needsClarification && (() => {
+          const allSuggestions = parsedTasks
+            ?.flatMap(t => t.suggestions ?? [])
+            .filter((s, i, arr) => arr.indexOf(s) === i) ?? [];
+          if (allSuggestions.length === 0) return null;
+          return (
+            <Animated.View entering={FadeInUp.delay(100).duration(300)} style={styles.suggestionsRow}>
+              {allSuggestions.map((suggestion) => (
+              <Pressable
+                key={suggestion}
+                onPress={() => handleParse(suggestion)}
+                style={[
+                  styles.suggestionChip,
+                  {
+                    backgroundColor: theme.colors.primaryLight,
+                    borderRadius: theme.radius.full ?? 20,
+                    borderColor: theme.colors.primary + '40',
+                  },
+                ]}
+              >
+                <Text style={[theme.typography.bodySmall, { color: theme.colors.primary, fontWeight: '600' }]}>
+                  {suggestion}
+                </Text>
+              </Pressable>
+              ))}
+            </Animated.View>
+          );
+        })()}
+
         {/* Input Area */}
         <Animated.View entering={FadeInDown.duration(400)}>
-          <Text style={[theme.typography.h2, { color: theme.colors.text, marginBottom: 8 }]}>
-            Thêm việc mới
-          </Text>
-          <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
-            Nhập hoặc nói bằng tiếng Việt, AI sẽ tự hiểu
-          </Text>
-
-          <Input
-            value={text}
-            onChangeText={setText}
-            placeholder="Ví dụ: 8 giờ sáng báo thức..."
-            multiline
-            autoFocus
-            rightIcon={
-              <VoiceButton
-                onResult={(transcript) => setText(prev => prev ? prev + ' ' + transcript : transcript)}
-                onError={(err) => setError(err)}
+          {!tasksReady && (
+            <>
+              <Input
+                value={text}
+                onChangeText={setText}
+                placeholder={needsClarification ? 'Trả lời...' : 'Ví dụ: 8 giờ sáng báo thức...'}
+                multiline
+                autoFocus
+                rightIcon={
+                  <VoiceButton
+                    onResult={(transcript) => setText(prev => prev ? prev + ' ' + transcript : transcript)}
+                    onError={(err) => setError(err)}
+                  />
+                }
               />
-            }
-          />
 
-          <View style={styles.buttonRow}>
-            <Button
-              title="Phân tích"
-              onPress={handleParse}
-              loading={loading}
-              disabled={!text.trim()}
-              style={{ flex: 1 }}
-            />
-          </View>
+              <View style={styles.buttonRow}>
+                {chatHistory.length > 0 && (
+                  <>
+                    <Button title="Làm lại" variant="secondary" onPress={handleReset} style={{ flex: 1 }} />
+                    <View style={{ width: 12 }} />
+                  </>
+                )}
+                <Button
+                  title={needsClarification ? 'Gửi trả lời' : 'Phân tích'}
+                  onPress={() => handleParse()}
+                  loading={loading}
+                  disabled={!text.trim()}
+                  style={{ flex: 1 }}
+                />
+              </View>
+
+              {/* Accept with clarification — user can still confirm despite questions */}
+              {needsClarification && parsedTasks && (
+                <Button
+                  title="Chấp nhận kết quả hiện tại ✓"
+                  variant="ghost"
+                  size="sm"
+                  onPress={handleConfirm}
+                  style={{ alignSelf: 'center', marginTop: 12 }}
+                />
+              )}
+            </>
+          )}
         </Animated.View>
 
-        {/* Examples */}
-        {!parsedTasks && !error && (
+        {/* Examples — only when fresh start */}
+        {chatHistory.length === 0 && !parsedTasks && !error && (
           <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.examples}>
             <Text style={[theme.typography.label, { color: theme.colors.textTertiary, marginBottom: 8 }]}>
               GỢI Ý
@@ -135,8 +278,8 @@ export function AddTaskScreen({ navigation, route }: Props) {
           </Animated.View>
         ) : null}
 
-        {/* Parsed Results */}
-        {parsedTasks && (
+        {/* Final Results — all tasks confirmed, no clarification */}
+        {tasksReady && (
           <Animated.View entering={FadeInUp.duration(400)}>
             <Text style={[theme.typography.label, { color: theme.colors.textTertiary, marginBottom: 12, marginTop: 24 }]}>
               KẾT QUẢ PHÂN TÍCH
@@ -154,7 +297,7 @@ export function AddTaskScreen({ navigation, route }: Props) {
               />
             ))}
             <View style={styles.buttonRow}>
-              <Button title="Thử lại" variant="secondary" onPress={() => setParsedTasks(null)} style={{ flex: 1 }} />
+              <Button title="Làm lại" variant="secondary" onPress={handleReset} style={{ flex: 1 }} />
               <View style={{ width: 12 }} />
               <Button title={"Xác nhận \u2713"} onPress={handleConfirm} style={{ flex: 1 }} />
             </View>
@@ -171,4 +314,9 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: 'row', marginTop: 16 },
   examples: { marginTop: 28 },
   errorBox: { padding: 16, marginTop: 16 },
+  chatBubble: { padding: 14, marginBottom: 10, maxWidth: '85%' },
+  userBubble: { alignSelf: 'flex-end' },
+  aiBubble: { alignSelf: 'flex-start' },
+  suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  suggestionChip: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
 });

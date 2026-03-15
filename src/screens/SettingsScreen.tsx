@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme, type ThemeMode } from '../theme';
@@ -8,7 +8,7 @@ import { useTaskStore } from '../store/taskStore';
 import { checkHealth, getApiUrl } from '../services/api';
 
 const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: string }[] = [
-  { mode: 'system', label: 'Theo hệ thống', icon: '📱' },
+  { mode: 'system', label: 'Hệ thống', icon: '📱' },
   { mode: 'light', label: 'Sáng', icon: '☀️' },
   { mode: 'dark', label: 'Tối', icon: '🌙' },
 ];
@@ -25,7 +25,11 @@ export function SettingsScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background, paddingBottom: insets.bottom, paddingTop: insets.top + 20 }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 40, paddingTop: insets.top + 20 }}
+      showsVerticalScrollIndicator={false}
+    >
       <Animated.View entering={FadeInDown.duration(400)}>
         {/* Theme Selection */}
         <View style={[styles.section, { backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg }]}>
@@ -100,7 +104,7 @@ export function SettingsScreen() {
           </View>
         </View>
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
 

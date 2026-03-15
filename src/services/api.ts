@@ -14,6 +14,7 @@ export interface ParsedTask {
   confidence: number;
   need_clarification: boolean;
   clarifying_question: string | null;
+  suggestions?: string[] | null;
   action: 'notify' | 'alarm' | 'open_app' | 'call';
   action_label: string;
   action_icon: string;
@@ -30,11 +31,28 @@ export interface ParseResult {
 export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?: Record<string, string>): Promise<ParseResult> {
   const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16).replace('T', ' ');
 
-  const res = await fetch(`${API_URL}/parse`, {
+  const doFetch = () => fetch(`${API_URL}/parse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, nowLocal, tz, contacts }),
+    signal: AbortSignal.timeout(15_000),
   });
+
+  let res: Response;
+  try {
+    res = await doFetch();
+  } catch (e) {
+    // Retry once on network/timeout error
+    try {
+      res = await doFetch();
+    } catch (retryErr) {
+      const err = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+      if (err.name === 'TimeoutError') {
+        throw new Error('Server phản hồi quá lâu. Kiểm tra kết nối mạng.');
+      }
+      throw new Error('Không thể kết nối server. Kiểm tra kết nối mạng.');
+    }
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));

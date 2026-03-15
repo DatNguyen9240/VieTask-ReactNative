@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -43,7 +43,11 @@ export function TaskDetailScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 20 }}
+      showsVerticalScrollIndicator={false}
+    >
       <Animated.View entering={FadeInDown.duration(400)} style={[styles.card, { backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl }, theme.shadows.md]}>
         {/* Icon */}
         <View style={[styles.iconBg, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.lg }]}>
@@ -87,7 +91,7 @@ export function TaskDetailScreen() {
         )}
         <Button title="Xóa việc" variant="danger" onPress={handleDelete} style={{ flex: 1 }} />
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
 
