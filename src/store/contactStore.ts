@@ -2,62 +2,61 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-/** A personal contact / shortcut */
-export interface Contact {
+/** A user-defined shortcut: key → value (completely free-form) */
+export interface Shortcut {
   id: string;
-  name: string;       // "con trai", "vợ", "sếp"
-  phone: string;      // "0901234567"
-  note?: string;      // optional note
+  key: string;    // "con trai", "dép lào", "yêu từ bé"
+  value: string;  // "0912345567", "zalo", "youtube", anything
 }
 
-interface ContactStore {
-  contacts: Contact[];
-  addContact: (name: string, phone: string, note?: string) => void;
-  updateContact: (id: string, data: Partial<Omit<Contact, 'id'>>) => void;
-  removeContact: (id: string) => void;
-  /** Get contacts as a simple name→phone map for sending to BE */
-  getContactsMap: () => Record<string, string>;
+interface ShortcutStore {
+  shortcuts: Shortcut[];
+  addShortcut: (key: string, value: string) => void;
+  updateShortcut: (id: string, data: Partial<Omit<Shortcut, 'id'>>) => void;
+  removeShortcut: (id: string) => void;
+  /** Get as simple key→value map for sending to BE */
+  getShortcutsMap: () => Record<string, string>;
 }
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-export const useContactStore = create<ContactStore>()(
+export const useShortcutStore = create<ShortcutStore>()(
   persist(
     (set, get) => ({
-      contacts: [],
+      shortcuts: [],
 
-      addContact: (name, phone, note) => {
+      addShortcut: (key, value) => {
         set((state) => ({
-          contacts: [...state.contacts, { id: generateId(), name: name.trim(), phone: phone.trim(), note }],
+          shortcuts: [...state.shortcuts, { id: generateId(), key: key.trim(), value: value.trim() }],
         }));
       },
 
-      updateContact: (id, data) => {
+      updateShortcut: (id, data) => {
         set((state) => ({
-          contacts: state.contacts.map(c =>
-            c.id === id ? { ...c, ...data } : c
+          shortcuts: state.shortcuts.map(s =>
+            s.id === id ? { ...s, ...data } : s
           ),
         }));
       },
 
-      removeContact: (id) => {
+      removeShortcut: (id) => {
         set((state) => ({
-          contacts: state.contacts.filter(c => c.id !== id),
+          shortcuts: state.shortcuts.filter(s => s.id !== id),
         }));
       },
 
-      getContactsMap: () => {
+      getShortcutsMap: () => {
         const map: Record<string, string> = {};
-        for (const c of get().contacts) {
-          map[c.name] = c.phone;
+        for (const s of get().shortcuts) {
+          map[s.key] = s.value;
         }
         return map;
       },
     }),
     {
-      name: 'vietask-contacts',
+      name: 'vietask-shortcuts',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

@@ -19,6 +19,7 @@ interface TaskStore {
   removeTask: (id: string) => Promise<void>;
   completeTask: (id: string) => void;
   markReminded: (id: string) => void;
+  duplicateTask: (id: string, minutesOffset: number) => Promise<void>;
   clearTasks: () => Promise<void>;
 }
 
@@ -77,6 +78,49 @@ export const useTaskStore = create<TaskStore>()(
           tasks: state.tasks.map(t =>
             t.id === id ? { ...t, reminded: true } : t
           ),
+        }));
+      },
+
+      duplicateTask: async (id, minutesOffset) => {
+        const original = get().tasks.find(t => t.id === id);
+        if (!original) return;
+
+        // Shift the datetime by minutesOffset
+        const date = new Date(original.datetime_local.replace(' ', 'T'));
+        date.setMinutes(date.getMinutes() + minutesOffset);
+        const newDatetime = date.toISOString().slice(0, 16).replace('T', ' ');
+
+        const newTask: ParsedTask = {
+          title: original.title,
+          datetime_local: newDatetime,
+          remind_before_minutes: original.remind_before_minutes,
+          repeat: original.repeat as any,
+          confidence: original.confidence,
+          need_clarification: false,
+          clarifying_question: null,
+          action: original.action,
+          action_label: original.action_label,
+          action_icon: original.action_icon,
+          action_url: original.action_url,
+          app_name: original.app_name,
+        };
+
+        const notificationId = await scheduleTaskNotification(
+          newTask.title,
+          newTask.datetime_local,
+          newTask.action_label ?? '',
+          newTask.action_icon ?? '🔔',
+        );
+
+        set((state) => ({
+          tasks: [{
+            ...newTask,
+            id: generateId(),
+            notificationId,
+            createdAt: new Date().toISOString(),
+            completed: false,
+            reminded: false,
+          }, ...state.tasks],
         }));
       },
 

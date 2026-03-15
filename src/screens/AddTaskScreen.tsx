@@ -6,18 +6,24 @@ import { useTheme } from '../theme';
 import { Button, Input, TaskCard, VoiceButton } from '../components';
 import { parseText, type ParsedTask } from '../services/api';
 import { useTaskStore } from '../store/taskStore';
+import { useShortcutStore } from '../store/contactStore';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 
 interface Props {
   navigation: NativeStackNavigationProp<any>;
+  route: RouteProp<any>;
 }
 
-export function AddTaskScreen({ navigation }: Props) {
+export function AddTaskScreen({ navigation, route }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const addTasks = useTaskStore((s) => s.addTasks);
+  const getShortcutsMap = useShortcutStore((s) => s.getShortcutsMap);
 
-  const [text, setText] = useState('');
+  const prefillTime = (route.params as any)?.prefillTime as string | undefined;
+
+  const [text, setText] = useState(prefillTime ? `${prefillTime.split(' ')[1]} ` : '');
   const [loading, setLoading] = useState(false);
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[] | null>(null);
   const [error, setError] = useState('');
@@ -29,7 +35,7 @@ export function AddTaskScreen({ navigation }: Props) {
     setParsedTasks(null);
 
     try {
-      const result = await parseText(text.trim());
+      const result = await parseText(text.trim(), 'Asia/Ho_Chi_Minh', getShortcutsMap());
       if (result.tasks?.length) {
         setParsedTasks(result.tasks);
       } else {

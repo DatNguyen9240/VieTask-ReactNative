@@ -9,6 +9,7 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { AddTaskScreen } from '../screens/AddTaskScreen';
 import { TaskDetailScreen } from '../screens/TaskDetailScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import ContactsScreen from '../screens/ContactsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -48,6 +49,14 @@ function HomeTabs() {
         options={{
           tabBarLabel: 'Trang chủ',
           tabBarIcon: ({ focused, color }) => <TabIcon icon="🏠" focused={focused} color={color} />,
+        }}
+      />
+      <Tab.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{
+          tabBarLabel: 'Danh bạ',
+          tabBarIcon: ({ focused, color }) => <TabIcon icon="📇" focused={focused} color={color} />,
         }}
       />
       <Tab.Screen

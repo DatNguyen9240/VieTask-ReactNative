@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from '../theme';
 import { TaskCard, FAB, TaskCardSkeleton } from '../components';
+import { SwipeableTaskCard } from '../components/SwipeableTaskCard';
 import { useTaskStore } from '../store/taskStore';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -15,6 +17,7 @@ export function HomeScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const tasks = useTaskStore((s) => s.tasks);
+  const removeTask = useTaskStore((s) => s.removeTask);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -26,7 +29,19 @@ export function HomeScreen({ navigation }: Props) {
     setTimeout(() => setRefreshing(false), 600);
   };
 
+  const handleDelete = (id: string, title: string) => {
+    if (Platform.OS === 'web') {
+      if (confirm(`Xóa "${title}"?`)) removeTask(id);
+    } else {
+      Alert.alert('Xóa', `Xóa "${title}"?`, [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xóa', style: 'destructive', onPress: () => removeTask(id) },
+      ]);
+    }
+  };
+
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
@@ -69,7 +84,7 @@ export function HomeScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
         <Text style={[theme.typography.label, { color: theme.colors.textTertiary, marginBottom: 12 }]}>
-          DANH SÁCH VIỆC
+          DANH SÁCH VIỆC · Vuốt ← xóa · Vuốt → hẹn thêm
         </Text>
 
         {tasks.length === 0 ? (
@@ -81,17 +96,22 @@ export function HomeScreen({ navigation }: Props) {
           </Animated.View>
         ) : (
           tasks.map((task, i) => (
-            <TaskCard
+            <SwipeableTaskCard
               key={task.id}
-              title={task.completed ? `✓ ${task.title}` : task.title}
-              time={task.datetime_local}
-              action={task.action}
-              actionLabel={task.action_label}
-              actionIcon={task.action_icon}
-              clarifyQuestion={task.clarifying_question}
-              index={i}
-              onPress={() => navigation.navigate('TaskDetail', { taskId: task.id })}
-            />
+              onDelete={() => handleDelete(task.id, task.title)}
+              onAddMore={() => navigation.navigate('AddTask', { prefillTime: task.datetime_local })}
+            >
+              <TaskCard
+                title={task.completed ? `✓ ${task.title}` : task.title}
+                time={task.datetime_local}
+                action={task.action}
+                actionLabel={task.action_label}
+                actionIcon={task.action_icon}
+                clarifyQuestion={task.clarifying_question}
+                index={i}
+                onPress={() => navigation.navigate('TaskDetail', { taskId: task.id })}
+              />
+            </SwipeableTaskCard>
           ))
         )}
 
@@ -104,6 +124,7 @@ export function HomeScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('AddTask')}
       />
     </View>
+    </GestureHandlerRootView>
   );
 }
 

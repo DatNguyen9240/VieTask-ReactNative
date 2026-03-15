@@ -27,13 +27,13 @@ export interface ParseResult {
 }
 
 /** Parse Vietnamese text into structured tasks */
-export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh'): Promise<ParseResult> {
+export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?: Record<string, string>): Promise<ParseResult> {
   const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16).replace('T', ' ');
 
   const res = await fetch(`${API_URL}/parse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, nowLocal, tz }),
+    body: JSON.stringify({ text, nowLocal, tz, contacts }),
   });
 
   if (!res.ok) {

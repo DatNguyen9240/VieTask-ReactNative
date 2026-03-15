@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, type ViewStyle } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, FadeIn } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 
 interface TaskCardProps {
@@ -15,68 +14,54 @@ interface TaskCardProps {
   style?: ViewStyle;
 }
 
-
-
 export function TaskCard({ title, time, action, actionLabel, actionIcon, clarifyQuestion, onPress, index = 0, style }: TaskCardProps) {
   const { theme } = useTheme();
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   return (
-    <Animated.View
-      entering={FadeIn.delay(index * 80).duration(400)}
-      style={[animStyle]}
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.radius.lg,
+          borderColor: theme.colors.borderLight,
+          borderWidth: 1,
+        },
+        theme.shadows.sm,
+        style,
+      ]}
     >
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={() => { scale.value = withSpring(0.97, { damping: 15 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 15 }); }}
-        activeOpacity={0.9}
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.colors.surface,
-            borderRadius: theme.radius.lg,
-            borderColor: theme.colors.borderLight,
-            borderWidth: 1,
-          },
-          theme.shadows.sm,
-          style,
-        ]}
-      >
-        {/* Icon */}
-        <View style={[styles.iconContainer, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.md }]}>
-          <Text style={styles.icon}>{actionIcon ?? '🔔'}</Text>
-        </View>
+      {/* Icon */}
+      <View style={[styles.iconContainer, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.md }]}>
+        <Text style={styles.icon}>{actionIcon ?? '🔔'}</Text>
+      </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]} numberOfLines={2}>
-            {title}
+      {/* Content */}
+      <View style={styles.content}>
+        <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]} numberOfLines={2}>
+          {title}
+        </Text>
+        <View style={styles.meta}>
+          <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '500' }]}>
+            {time}
           </Text>
-          <View style={styles.meta}>
-            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '500' }]}>
-              {time}
+          <View style={[styles.badge, { backgroundColor: theme.colors.surfaceSecondary, borderRadius: theme.radius.sm }]}>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+              {actionLabel ?? action}
             </Text>
-            <View style={[styles.badge, { backgroundColor: theme.colors.surfaceSecondary, borderRadius: theme.radius.sm }]}>
-              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-                {actionLabel ?? action}
-              </Text>
-            </View>
           </View>
-          {clarifyQuestion && (
-            <View style={[styles.clarify, { backgroundColor: theme.colors.warningLight, borderRadius: theme.radius.sm }]}>
-              <Text style={[theme.typography.caption, { color: theme.colors.warning }]}>
-                ⚠️ {clarifyQuestion}
-              </Text>
-            </View>
-          )}
         </View>
-      </TouchableOpacity>
-    </Animated.View>
+        {clarifyQuestion && (
+          <View style={[styles.clarify, { backgroundColor: theme.colors.warningLight, borderRadius: theme.radius.sm }]}>
+            <Text style={[theme.typography.caption, { color: theme.colors.warning }]}>
+              ⚠️ {clarifyQuestion}
+            </Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 }
 
