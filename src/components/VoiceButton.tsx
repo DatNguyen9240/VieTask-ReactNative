@@ -1,7 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { TouchableOpacity, Text, StyleSheet, Platform, Alert } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../theme';
+
+// Native imports (tree-shaken on web)
+let ExpoSpeechRecognitionModule: any = null;
+let useSpeechRecognitionEvent: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const mod = require('expo-speech-recognition');
+    ExpoSpeechRecognitionModule = mod.ExpoSpeechRecognitionModule;
+    useSpeechRecognitionEvent = mod.useSpeechRecognitionEvent;
+  } catch {
+    // Not available — will fall back gracefully
+  }
+}
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -10,22 +24,69 @@ interface VoiceButtonProps {
   onError?: (error: string) => void;
 }
 
-export function VoiceButton({ onResult, onError }: VoiceButtonProps) {
+// ===== Native Voice Button (Android/iOS) =====
+function NativeVoiceButton({ onResult, onError }: VoiceButtonProps) {
   const { theme } = useTheme();
   const [listening, setListening] = useState(false);
-  const [supported, setSupported] = useState(false);
   const scale = useSharedValue(1);
   const pulse = useSharedValue(1);
 
-  // Check Web Speech API support (for web preview)
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      setSupported('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
-    } else {
-      // On native, assume supported (expo-speech-recognition handles this)
-      setSupported(true);
+  // Register native event listeners via hooks
+  useSpeechRecognitionEvent('start', () => {
+    setListening(true);
+    pulse.value = withRepeat(withTiming(1.4, { duration: 600 }), -1, true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setListening(false);
+    pulse.value = withSpring(1);
+  });
+
+  useSpeechRecognitionEvent('result', (event: any) => {
+    const transcript = event.results?.[0]?.transcript ?? '';
+    if (transcript) {
+      onResult(transcript);
     }
-  }, []);
+  });
+
+  useSpeechRecognitionEvent('error', (event: any) => {
+    const errorMsg = event.error === 'no-speech'
+      ? 'Không nghe thấy gì, thử lại nhé'
+      : event.error === 'not-allowed'
+        ? 'Chưa cấp quyền microphone'
+        : `Lỗi nhận diện: ${event.error}`;
+    onError?.(errorMsg);
+  });
+
+  const handlePress = useCallback(async () => {
+    if (listening) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+
+    try {
+      // Request permissions
+      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) {
+        Alert.alert(
+          'Cần cấp quyền',
+          'Vui lòng cấp quyền microphone và nhận diện giọng nói để sử dụng tính năng này.',
+          [{ text: 'OK' }],
+        );
+        return;
+      }
+
+      // Start speech recognition
+      ExpoSpeechRecognitionModule.start({
+        lang: 'vi-VN',
+        interimResults: false,
+        continuous: false,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      onError?.(`Không thể bắt đầu nhận diện: ${msg}`);
+    }
+  }, [listening, onError]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
@@ -36,24 +97,42 @@ export function VoiceButton({ onResult, onError }: VoiceButtonProps) {
     transform: [{ scale: scale.value }],
   }));
 
-  const startListening = async () => {
-    if (Platform.OS === 'web') {
-      startWebSpeech();
-      return;
-    }
-    // Native: use expo-speech-recognition (dynamic import to avoid web crash)
-    try {
-      // @ts-ignore — expo-speech-recognition is native-only, not installed for web
-      const ExpoSpeech = await import('expo-speech-recognition').catch(() => null);
-      if (!ExpoSpeech) { onError?.('Speech recognition not available'); return; }
-      // Native implementation would go here
-      onError?.('Native speech recognition requires device build');
-    } catch {
-      onError?.('Speech recognition failed');
-    }
-  };
+  return (
+    <>
+      {listening && (
+        <Animated.View style={[styles.pulse, { backgroundColor: theme.colors.primary, borderRadius: 999 }, pulseStyle]} />
+      )}
+      <AnimatedTouchable
+        onPress={handlePress}
+        onPressIn={() => { scale.value = withSpring(0.9); }}
+        onPressOut={() => { scale.value = withSpring(1); }}
+        activeOpacity={0.7}
+        style={[
+          styles.button,
+          {
+            backgroundColor: listening ? theme.colors.danger : theme.colors.primary,
+            borderRadius: theme.radius.full,
+          },
+          buttonStyle,
+        ]}
+      >
+        <Text style={styles.icon}>{listening ? '⏹' : '🎤'}</Text>
+      </AnimatedTouchable>
+    </>
+  );
+}
 
-  const startWebSpeech = () => {
+// ===== Web Voice Button (Browser) =====
+function WebVoiceButton({ onResult, onError }: VoiceButtonProps) {
+  const { theme } = useTheme();
+  const [listening, setListening] = useState(false);
+  const scale = useSharedValue(1);
+  const pulse = useSharedValue(1);
+
+  const supported = typeof window !== 'undefined' &&
+    ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+
+  const handlePress = useCallback(() => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) { onError?.('Browser không hỗ trợ'); return; }
 
@@ -79,18 +158,26 @@ export function VoiceButton({ onResult, onError }: VoiceButtonProps) {
     };
 
     recognition.start();
-  };
+  }, [onResult, onError]);
 
   if (!supported) return null;
 
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+    opacity: listening ? 0.6 : 0,
+  }));
+
+  const buttonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
     <>
-      {/* Pulse ring */}
       {listening && (
         <Animated.View style={[styles.pulse, { backgroundColor: theme.colors.primary, borderRadius: 999 }, pulseStyle]} />
       )}
       <AnimatedTouchable
-        onPress={listening ? undefined : startListening}
+        onPress={listening ? undefined : handlePress}
         onPressIn={() => { scale.value = withSpring(0.9); }}
         onPressOut={() => { scale.value = withSpring(1); }}
         activeOpacity={0.7}
@@ -107,6 +194,14 @@ export function VoiceButton({ onResult, onError }: VoiceButtonProps) {
       </AnimatedTouchable>
     </>
   );
+}
+
+// ===== Main Export =====
+export function VoiceButton(props: VoiceButtonProps) {
+  if (Platform.OS !== 'web' && ExpoSpeechRecognitionModule && useSpeechRecognitionEvent) {
+    return <NativeVoiceButton {...props} />;
+  }
+  return <WebVoiceButton {...props} />;
 }
 
 const styles = StyleSheet.create({

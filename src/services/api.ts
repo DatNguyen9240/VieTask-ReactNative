@@ -4,7 +4,7 @@
  */
 
 // Đọc từ .env: EXPO_PUBLIC_API_URL
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.1.100:3000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://vietask-production.up.railway.app';
 
 export interface ParsedTask {
   title: string;

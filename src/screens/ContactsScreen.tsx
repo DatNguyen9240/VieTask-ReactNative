@@ -45,7 +45,7 @@ export default function ContactsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 16 }}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: insets.top + 16 }}
     >
       <View style={styles.header}>
         <Text style={[theme.typography.h2, { color: theme.colors.text }]}>📇 Từ điển cá nhân</Text>
