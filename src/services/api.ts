@@ -3,8 +3,7 @@
  * Connects to the NotificationApp backend for parsing Vietnamese text.
  */
 
-// Đọc từ .env: EXPO_PUBLIC_API_URL
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://vietask-production.up.railway.app';
+const API_URL = 'https://vietask-production.up.railway.app';
 console.log('[API] Using URL:', API_URL);
 
 export interface ParsedTask {
@@ -28,16 +27,26 @@ export interface ParseResult {
   error?: string;
 }
 
+/** Create an abort signal with timeout (Hermes doesn't support AbortSignal.timeout) */
+function createTimeoutSignal(ms: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(timer) };
+}
+
 /** Parse Vietnamese text into structured tasks */
 export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?: Record<string, string>): Promise<ParseResult> {
   const nowLocal = new Date().toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16).replace('T', ' ');
 
-  const doFetch = (timeoutMs = 45_000) => fetch(`${API_URL}/parse`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, nowLocal, tz, contacts }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const doFetch = (timeoutMs = 45_000) => {
+    const { signal, clear } = createTimeoutSignal(timeoutMs);
+    return fetch(`${API_URL}/parse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, nowLocal, tz, contacts }),
+      signal,
+    }).finally(clear);
+  };
 
   let res: Response;
   try {
@@ -54,7 +63,7 @@ export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?
     } catch (retryErr) {
       const err = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
       console.error(`[API] Retry also failed: ${err.name}: ${err.message}`);
-      if (err.name === 'TimeoutError') {
+      if (err.name === 'AbortError') {
         throw new Error('Server phản hồi quá lâu. Kiểm tra kết nối mạng.');
       }
       throw new Error(`Không thể kết nối server (${err.name}). Kiểm tra kết nối mạng.`);
@@ -72,7 +81,9 @@ export async function parseText(text: string, tz = 'Asia/Ho_Chi_Minh', contacts?
 /** Health check */
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(5000) });
+    const { signal, clear } = createTimeoutSignal(5000);
+    const res = await fetch(`${API_URL}/health`, { signal });
+    clear();
     return res.ok;
   } catch {
     return false;

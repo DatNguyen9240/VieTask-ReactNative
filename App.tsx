@@ -24,15 +24,25 @@ function AppContent() {
     const warmUp = async () => {
       for (let i = 0; i < 3; i++) {
         try {
+          console.log(`[API] Attempting health check... (attempt ${i + 1}/3)`);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 60_000);
           const res = await fetch(
-            `${process.env.EXPO_PUBLIC_API_URL ?? 'https://vietask-production.up.railway.app'}/health`,
-            { signal: AbortSignal.timeout(60_000) }
+            'https://vietask-production.up.railway.app/health',
+            { signal: controller.signal }
           );
+          clearTimeout(timer);
+          console.log(`[API] Response status: ${res.status}`);
           if (res.ok) {
-            console.log('[API] Server ready ✓');
+            const data = await res.text();
+            console.log('[API] Server ready ✓', data);
             return;
           }
-        } catch { /* ignore, retry */ }
+        } catch (err: any) {
+          console.error(`[API] Health check failed:`, err?.message || err);
+          console.error(`[API] Error name:`, err?.name);
+          console.error(`[API] Error type:`, typeof err);
+        }
         console.log(`[API] Server waking up... (attempt ${i + 1}/3)`);
         await new Promise(r => setTimeout(r, 10_000));
       }
