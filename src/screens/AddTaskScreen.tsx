@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { Button, Input, TaskCard, VoiceButton } from '../components';
-import { parseText, type ParsedTask } from '../services/api';
+import { parseText, fetchSuggestions, type ParsedTask } from '../services/api';
 import { useTaskStore } from '../store/taskStore';
 import { useShortcutStore } from '../store/contactStore';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +20,13 @@ interface Props {
   route: RouteProp<any>;
 }
 
+const FALLBACK_EXAMPLES = [
+  '8 giờ sáng báo thức',
+  'Nhắc tôi uống thuốc lúc 7 rưỡi',
+  'Sáng mai 6h báo thức rồi 8h họp team',
+  '3 giờ chiều gọi cho khách hàng',
+];
+
 export function AddTaskScreen({ navigation, route }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -28,6 +35,7 @@ export function AddTaskScreen({ navigation, route }: Props) {
   const scrollRef = useRef<ScrollView>(null);
 
   const prefillTime = (route.params as any)?.prefillTime as string | undefined;
+  const voiceAutoStart = (route.params as any)?.voiceAutoStart as boolean | undefined;
 
   const [text, setText] = useState(prefillTime ? `${prefillTime.split(' ')[1]} ` : '');
   const [loading, setLoading] = useState(false);
@@ -35,6 +43,14 @@ export function AddTaskScreen({ navigation, route }: Props) {
   const [error, setError] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [originalText, setOriginalText] = useState('');
+  const [examples, setExamples] = useState<string[]>(FALLBACK_EXAMPLES);
+
+  // Fetch AI suggestions on mount
+  useEffect(() => {
+    fetchSuggestions().then(suggestions => {
+      if (suggestions.length > 0) setExamples(suggestions);
+    });
+  }, []);
 
   // Whether we're in clarification mode (waiting for user reply)
   const needsClarification = parsedTasks?.some(t => t.need_clarification) ?? false;
@@ -55,11 +71,9 @@ export function AddTaskScreen({ navigation, route }: Props) {
     setLoading(true);
     setError('');
 
-    // If this is a clarification reply, combine with original text
     const isReply = chatHistory.length > 0;
     const fullText = isReply ? `${originalText}, ${sendText}` : sendText;
 
-    // Add user message to chat
     setChatHistory(prev => [...prev, { role: 'user', text: sendText }]);
     if (!isReply) setOriginalText(sendText);
     setText('');
@@ -71,17 +85,14 @@ export function AddTaskScreen({ navigation, route }: Props) {
         setParsedTasks(result.tasks);
 
         if (hasClarify) {
-          // AI needs more info → show questions as chat bubbles
           const questions = result.tasks
             .filter(t => t.need_clarification && t.clarifying_question)
             .map(t => t.clarifying_question!);
           if (questions.length > 0) {
             setChatHistory(prev => [...prev, { role: 'ai', text: questions.join('\n') }]);
           }
-          // Store combined text so far for next round
           setOriginalText(fullText);
         }
-        // else: all tasks are clear → show results for confirmation
       } else {
         setError(result.error || 'Không thể phân tích câu này');
       }
@@ -96,7 +107,8 @@ export function AddTaskScreen({ navigation, route }: Props) {
   const handleConfirm = async () => {
     if (!parsedTasks) return;
     await addTasks(parsedTasks);
-    navigation.goBack();
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('Main' as never);
   };
 
   const handleReset = () => {
@@ -106,13 +118,6 @@ export function AddTaskScreen({ navigation, route }: Props) {
     setText('');
     setError('');
   };
-
-  const examples = [
-    '8 giờ sáng báo thức',
-    'Nhắc tôi uống thuốc lúc 7 rưỡi',
-    'Sáng mai 6h báo thức rồi 8h họp team',
-    '3 giờ chiều gọi cho khách hàng',
-  ];
 
   // Final tasks ready for confirmation (no clarification needed)
   const tasksReady = parsedTasks && !needsClarification;
@@ -213,6 +218,7 @@ export function AddTaskScreen({ navigation, route }: Props) {
                 autoFocus
                 rightIcon={
                   <VoiceButton
+                    autoStart={voiceAutoStart}
                     onResult={(transcript) => setText(prev => prev ? prev + ' ' + transcript : transcript)}
                     onError={(err) => setError(err)}
                   />

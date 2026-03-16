@@ -3,7 +3,7 @@
  * Connects to the NotificationApp backend for parsing Vietnamese text.
  */
 
-const API_URL = 'https://vietask-production.up.railway.app';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://vietask-production.up.railway.app';
 console.log('[API] Using URL:', API_URL);
 
 export interface ParsedTask {
@@ -20,6 +20,7 @@ export interface ParsedTask {
   action_icon: string;
   action_url?: string | null;
   app_name: string | null;
+  android_package?: string | null;
 }
 
 export interface ParseResult {
@@ -92,3 +93,19 @@ export async function checkHealth(): Promise<boolean> {
 
 /** Get the current API URL */
 export function getApiUrl() { return API_URL; }
+
+/** Fetch AI-generated contextual suggestions */
+export async function fetchSuggestions(tz = 'Asia/Ho_Chi_Minh'): Promise<string[]> {
+  try {
+    const { signal, clear } = createTimeoutSignal(5000);
+    const res = await fetch(`${API_URL}/suggestions?tz=${encodeURIComponent(tz)}`, { signal });
+    clear();
+    if (res.ok) {
+      const data = await res.json() as { suggestions: string[] };
+      if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        return data.suggestions;
+      }
+    }
+  } catch { /* timeout or network error — use fallback */ }
+  return [];
+}

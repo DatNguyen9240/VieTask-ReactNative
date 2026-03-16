@@ -17,7 +17,7 @@ interface TaskStore {
   tasks: StoredTask[];
   addTasks: (newTasks: ParsedTask[]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
-  completeTask: (id: string) => void;
+  completeTask: (id: string) => Promise<void>;
   markReminded: (id: string) => void;
   duplicateTask: (id: string, minutesOffset: number) => Promise<void>;
   clearTasks: () => Promise<void>;
@@ -35,15 +35,17 @@ export const useTaskStore = create<TaskStore>()(
       addTasks: async (newTasks) => {
         const storedTasks: StoredTask[] = [];
         for (const t of newTasks) {
+          const id = generateId();
           const notificationId = await scheduleTaskNotification(
             t.title,
             t.datetime_local,
             t.action_label,
             t.action_icon,
+            id,
           );
           storedTasks.push({
             ...t,
-            id: generateId(),
+            id,
             notificationId,
             createdAt: new Date().toISOString(),
             completed: false,
@@ -65,10 +67,14 @@ export const useTaskStore = create<TaskStore>()(
         }));
       },
 
-      completeTask: (id) => {
+      completeTask: async (id) => {
+        const task = get().tasks.find(t => t.id === id);
+        if (task?.notificationId) {
+          await cancelNotification(task.notificationId);
+        }
         set((state) => ({
           tasks: state.tasks.map(t =>
-            t.id === id ? { ...t, completed: true, reminded: true } : t
+            t.id === id ? { ...t, completed: true, reminded: true, notificationId: null } : t
           ),
         }));
       },
@@ -103,19 +109,22 @@ export const useTaskStore = create<TaskStore>()(
           action_icon: original.action_icon,
           action_url: original.action_url,
           app_name: original.app_name,
+          android_package: original.android_package,
         };
 
+        const newId = generateId();
         const notificationId = await scheduleTaskNotification(
           newTask.title,
           newTask.datetime_local,
           newTask.action_label ?? '',
           newTask.action_icon ?? '🔔',
+          newId,
         );
 
         set((state) => ({
           tasks: [{
             ...newTask,
-            id: generateId(),
+            id: newId,
             notificationId,
             createdAt: new Date().toISOString(),
             completed: false,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Platform, Alert } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../theme';
@@ -22,10 +22,11 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 interface VoiceButtonProps {
   onResult: (text: string) => void;
   onError?: (error: string) => void;
+  autoStart?: boolean;
 }
 
 // ===== Native Voice Button (Android/iOS) =====
-function NativeVoiceButton({ onResult, onError }: VoiceButtonProps) {
+function NativeVoiceButton({ onResult, onError, autoStart }: VoiceButtonProps) {
   const { theme } = useTheme();
   const [listening, setListening] = useState(false);
   const scale = useSharedValue(1);
@@ -87,6 +88,14 @@ function NativeVoiceButton({ onResult, onError }: VoiceButtonProps) {
       onError?.(`Không thể bắt đầu nhận diện: ${msg}`);
     }
   }, [listening, onError]);
+
+  // Auto-start speech recognition when autoStart prop is true
+  useEffect(() => {
+    if (autoStart && !listening) {
+      const timer = setTimeout(() => handlePress(), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoStart]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],

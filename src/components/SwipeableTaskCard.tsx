@@ -1,16 +1,17 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
+  runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useTheme } from '../theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = 70;
+// isOpen encoding: 0=closed, -1=swiped left (delete visible), 1=swiped right (add visible)
 
 interface SwipeableTaskCardProps {
   children: React.ReactNode;
@@ -21,33 +22,32 @@ interface SwipeableTaskCardProps {
 export function SwipeableTaskCard({ children, onDelete, onAddMore }: SwipeableTaskCardProps) {
   const { theme } = useTheme();
   const translateX = useSharedValue(0);
-  const isOpen = useRef<'left' | 'right' | null>(null);
+  const isOpen = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-15, 15])
     .failOffsetY([-10, 10])
     .onUpdate((e) => {
       let tx: number;
-      if (isOpen.current === 'left') {
+      if (isOpen.value === -1) {
         tx = -90 + e.translationX;
-      } else if (isOpen.current === 'right') {
+      } else if (isOpen.value === 1) {
         tx = 90 + e.translationX;
       } else {
         tx = e.translationX;
       }
-      // Clamp to [-90, 90] — just enough to reveal action icons
       translateX.value = Math.max(-90, Math.min(90, tx));
     })
     .onEnd(() => {
       if (translateX.value < -SWIPE_THRESHOLD) {
         translateX.value = withTiming(-90, { duration: 200 });
-        isOpen.current = 'left';
+        isOpen.value = -1;
       } else if (translateX.value > SWIPE_THRESHOLD) {
         translateX.value = withTiming(90, { duration: 200 });
-        isOpen.current = 'right';
+        isOpen.value = 1;
       } else {
         translateX.value = withTiming(0, { duration: 200 });
-        isOpen.current = null;
+        isOpen.value = 0;
       }
     });
 
@@ -56,13 +56,14 @@ export function SwipeableTaskCard({ children, onDelete, onAddMore }: SwipeableTa
   }));
 
   const handleDelete = () => {
-    translateX.value = withTiming(-SCREEN_WIDTH, { duration: 300 });
-    setTimeout(onDelete, 300);
+    translateX.value = withTiming(0, { duration: 200 });
+    isOpen.value = 0;
+    onDelete();
   };
 
   const handleAddMore = () => {
     translateX.value = withTiming(0, { duration: 200 });
-    isOpen.current = null;
+    isOpen.value = 0;
     onAddMore();
   };
 

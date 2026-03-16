@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, Modal, StyleSheet, Pressable, Platform, Alert } from 'react-native';
-import Animated, { SlideInUp } from 'react-native-reanimated';
+import Animated, { SlideInUp, SlideOutUp } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { useTaskStore, type StoredTask } from '../store/taskStore';
 import { executeTaskAction } from '../services/taskActions';
@@ -23,7 +23,6 @@ export function TaskReminderModal() {
     console.log('[Reminder] Checking', tasks.length, 'tasks...');
 
     for (const task of tasks) {
-      // Skip completed or already reminded
       if (task.completed || task.reminded) {
         console.log('[Reminder] Skip (completed/reminded):', task.title, { completed: task.completed, reminded: task.reminded });
         continue;
@@ -33,14 +32,12 @@ export function TaskReminderModal() {
       const delay = taskTime - now;
       console.log('[Reminder] Task:', task.title, '| time:', task.datetime_local, '| delay:', Math.round(delay / 1000), 's');
 
-      // Due now or recently (within 10 min) → show immediately
       if (delay <= 0 && delay > -10 * 60 * 1000) {
         console.log('[Reminder] ✅ TRIGGERING:', task.title);
         setActiveReminder(task);
         return;
       }
 
-      // Future task — find the nearest one
       if (delay > 0 && delay < nearestDelay) {
         nearestDelay = delay;
         nearest = task;
@@ -64,23 +61,50 @@ export function TaskReminderModal() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [scheduleNext]);
 
-  const handleComplete = async () => {
+  // Auto-dismiss: stay until 1 minute after task time, then hide
+  useEffect(() => {
     if (!activeReminder) return;
+    const taskTime = new Date(activeReminder.datetime_local.replace(' ', 'T')).getTime();
+    const dismissAt = taskTime + 60_000; // task time + 1 minute
+    const remaining = Math.max(5_000, dismissAt - Date.now()); // minimum 5s
+    const autoDismiss = setTimeout(() => {
+      handleDismiss();
+    }, remaining);
+    return () => clearTimeout(autoDismiss);
+  }, [activeReminder]);
+
+  const handleComplete = async () => {
+    console.log('[Reminder] ✓ XONG TAPPED');
+    if (!activeReminder) { console.log('[Reminder] No active reminder!'); return; }
     const task = activeReminder;
+    console.log('[Reminder] Task:', task.title, 'action:', task.action, 'app:', task.app_name, 'url:', task.action_url);
     setActiveReminder(null);
     completeTask(task.id);
 
-    // Parse hour/minute from datetime_local
     const timeParts = task.datetime_local.match(/(\d{2}):(\d{2})$/);
     const hour = timeParts ? Number(timeParts[1]) : undefined;
     const minute = timeParts ? Number(timeParts[2]) : undefined;
 
-    // Execute the task action (alarm, open app, call)
-    const result = await executeTaskAction(task.action, task.title, task.app_name ?? null, task.action_url, hour, minute);
-    if (Platform.OS === 'web') {
-      console.log('[Action]', result);
-    } else {
-      Alert.alert('Thực hiện', result);
+    console.log('[Reminder] Executing action:', task.action, task.app_name, task.action_url);
+    try {
+      const result = await executeTaskAction({
+        action: task.action,
+        title: task.title,
+        app_name: task.app_name,
+        action_url: task.action_url,
+        android_package: task.android_package,
+        hour,
+        minute,
+      });
+      console.log('[Reminder] Action result:', result);
+    } catch (e) {
+      console.error('[Reminder] Action error:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (Platform.OS === 'web') {
+        alert('Lỗi: ' + msg);
+      } else {
+        Alert.alert('Lỗi', msg);
+      }
     }
   };
 
@@ -94,66 +118,55 @@ export function TaskReminderModal() {
   if (!activeReminder) return null;
 
   const icon = activeReminder.action_icon ?? '🔔';
-  const label = activeReminder.action_label ?? activeReminder.action;
+  const timeMatch = activeReminder.datetime_local.match(/(\d{2}:\d{2})$/);
+  const timeStr = timeMatch ? timeMatch[1] : '';
 
   return (
-    <Modal transparent animationType="fade" visible={!!activeReminder} onRequestClose={handleDismiss}>
+    <Modal transparent animationType="none" visible={!!activeReminder} onRequestClose={handleDismiss}>
       <View style={styles.overlay}>
         <Animated.View
-          entering={SlideInUp.duration(400).springify()}
-          style={[styles.card, { backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl }, theme.shadows.lg]}
+          entering={SlideInUp.duration(300)}
+          style={[
+            styles.banner,
+            {
+              backgroundColor: theme.colors.surface,
+              borderRadius: theme.radius.lg,
+              borderLeftColor: theme.colors.primary,
+            },
+            theme.shadows.md,
+          ]}
         >
-          <View style={[styles.iconBg, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.lg }]}>
-            <Text style={{ fontSize: 36 }}>{icon}</Text>
+          {/* Icon circle */}
+          <View style={[styles.iconCircle, { backgroundColor: theme.colors.primaryLight }]}>
+            <Text style={styles.iconText}>{icon}</Text>
           </View>
 
-          <View style={[styles.badge, { backgroundColor: theme.colors.primaryLight, borderRadius: theme.radius.sm }]}>
-            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}>
-              {label}
+          {/* Content */}
+          <View style={styles.content}>
+            <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={2}>
+              {activeReminder.title}
+            </Text>
+            <Text style={[styles.time, { color: theme.colors.primary }]}>
+              ⏰ {timeStr}
             </Text>
           </View>
 
-          <Text style={[theme.typography.h2, { color: theme.colors.text, textAlign: 'center', marginTop: 12 }]}>
-            {activeReminder.title}
-          </Text>
-
-          <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginTop: 6 }]}>
-            {activeReminder.datetime_local}
-          </Text>
-
+          {/* Actions */}
           <View style={styles.actions}>
-            {/* Dismiss */}
-            <Pressable
-              onPress={handleDismiss}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: pressed ? theme.colors.dangerLight : theme.colors.surfaceSecondary,
-                  borderRadius: theme.radius.md,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 22 }}>{"✕"}</Text>
-              <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginTop: 4 }]}>
-                Để sau
-              </Text>
-            </Pressable>
-
-            {/* Complete */}
             <Pressable
               onPress={handleComplete}
               style={({ pressed }) => [
-                styles.actionBtn,
+                styles.doneBtn,
                 {
-                  backgroundColor: pressed ? theme.colors.successLight : theme.colors.primary,
-                  borderRadius: theme.radius.md,
+                  backgroundColor: pressed ? theme.colors.primaryLight : theme.colors.primary,
+                  borderRadius: theme.radius.sm,
                 },
               ]}
             >
-              <Text style={{ fontSize: 22, color: 'white' }}>{"✓"}</Text>
-              <Text style={[theme.typography.bodySmall, { color: 'white', marginTop: 4 }]}>
-                Hoàn thành
-              </Text>
+              <Text style={styles.doneBtnText}>✓ Xong</Text>
+            </Pressable>
+            <Pressable onPress={handleDismiss} hitSlop={10} style={styles.closeBtn}>
+              <Text style={[styles.closeBtnText, { color: theme.colors.textTertiary }]}>✕</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -165,39 +178,63 @@ export function TaskReminderModal() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'web' ? 80 : 120,
-    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'web' ? 40 : 60,
+    paddingHorizontal: 12,
   },
-  card: {
+  banner: {
     width: '100%',
-    maxWidth: 360,
-    padding: 28,
+    maxWidth: 420,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 14,
+    borderLeftWidth: 4,
   },
-  iconBg: {
-    width: 72,
-    height: 72,
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginTop: 12,
+  iconText: {
+    fontSize: 22,
+  },
+  content: {
+    flex: 1,
+    gap: 4,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  time: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 24,
-    width: '100%',
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+  },
+  doneBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  doneBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  closeBtnText: {
+    fontSize: 20,
+    fontWeight: '600',
   },
 });
