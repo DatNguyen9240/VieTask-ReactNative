@@ -27,13 +27,16 @@ export function SwipeableTaskCard({ children, onDelete, onAddMore }: SwipeableTa
     .activeOffsetX([-15, 15])
     .failOffsetY([-10, 10])
     .onUpdate((e) => {
+      let tx: number;
       if (isOpen.current === 'left') {
-        translateX.value = Math.min(0, -90 + e.translationX);
+        tx = -90 + e.translationX;
       } else if (isOpen.current === 'right') {
-        translateX.value = Math.max(0, 90 + e.translationX);
+        tx = 90 + e.translationX;
       } else {
-        translateX.value = e.translationX;
+        tx = e.translationX;
       }
+      // Clamp to [-90, 90] — just enough to reveal action icons
+      translateX.value = Math.max(-90, Math.min(90, tx));
     })
     .onEnd(() => {
       if (translateX.value < -SWIPE_THRESHOLD) {

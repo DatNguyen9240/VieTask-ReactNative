@@ -196,12 +196,54 @@ function WebVoiceButton({ onResult, onError }: VoiceButtonProps) {
   );
 }
 
+// ===== Fallback — module not installed =====
+function FallbackVoiceButton({ onError }: VoiceButtonProps) {
+  const { theme } = useTheme();
+  const scale = useSharedValue(1);
+
+  const buttonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = useCallback(() => {
+    Alert.alert(
+      'Chưa cài đặt',
+      'Tính năng nhận diện giọng nói cần cài thêm expo-speech-recognition. Vui lòng chạy:\nnpx expo install expo-speech-recognition',
+      [{ text: 'OK' }],
+    );
+    onError?.('Chưa cài expo-speech-recognition');
+  }, [onError]);
+
+  return (
+    <AnimatedTouchable
+      onPress={handlePress}
+      onPressIn={() => { scale.value = withSpring(0.9); }}
+      onPressOut={() => { scale.value = withSpring(1); }}
+      activeOpacity={0.7}
+      style={[
+        styles.button,
+        {
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.radius.full,
+        },
+        buttonStyle,
+      ]}
+    >
+      <Text style={styles.icon}>🎤</Text>
+    </AnimatedTouchable>
+  );
+}
+
 // ===== Main Export =====
 export function VoiceButton(props: VoiceButtonProps) {
   if (Platform.OS !== 'web' && ExpoSpeechRecognitionModule && useSpeechRecognitionEvent) {
     return <NativeVoiceButton {...props} />;
   }
-  return <WebVoiceButton {...props} />;
+  if (Platform.OS === 'web') {
+    return <WebVoiceButton {...props} />;
+  }
+  // Native but module not available — show fallback
+  return <FallbackVoiceButton {...props} />;
 }
 
 const styles = StyleSheet.create({

@@ -20,7 +20,7 @@ export function TaskCard({ title, time, action, actionLabel, actionIcon, clarify
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={1}
       style={[
         styles.card,
         {

@@ -66,35 +66,52 @@ async function setAlarm(title: string, hour?: number, minute?: number): Promise<
   return '⏰ Báo thức đã được nhắc';
 }
 
-/** Open an app — uses action_url from AI when available */
+/**
+ * Open an app dynamically — no hardcoded map.
+ * Priority: deep link actionUrl → {appName}:// scheme → web URL (last resort)
+ */
 async function openApp(appName: string | null, actionUrl: string | null | undefined): Promise<string> {
   const label = appName || 'app';
-
-  // Use AI-provided URL if available
-  const url = actionUrl || (appName ? `https://www.${appName.toLowerCase().replace(/\s+/g, '')}.com` : null);
-
-  if (!url) return `📱 Không biết mở app nào`;
+  const cleanName = appName?.toLowerCase().replace(/\s+/g, '') ?? '';
+  const isDeepLink = actionUrl && !actionUrl.startsWith('http');
+  const isWebUrl = actionUrl && actionUrl.startsWith('http');
 
   if (Platform.OS === 'web') {
-    window.open(url, '_blank');
+    const url = actionUrl || (cleanName ? `https://www.${cleanName}.com` : null);
+    if (url) window.open(url, '_blank');
     return `📱 Đã mở ${label}`;
   }
 
-  // Native: try deep link first, fallback to web URL
-  const cleanName = appName?.toLowerCase().replace(/\s+/g, '') ?? '';
-  const deepLinks = [`${cleanName}://`, `com.${cleanName}://`];
-
-  for (const link of deepLinks) {
-    const canOpen = await Linking.canOpenURL(link).catch(() => false);
-    if (canOpen) {
-      await Linking.openURL(link);
+  // 1. If actionUrl is a deep link (fb://, zalo://) → try immediately
+  if (isDeepLink) {
+    try {
+      await Linking.openURL(actionUrl);
       return `📱 Đã mở ${label}`;
-    }
+    } catch { /* scheme not installed, continue */ }
   }
 
-  // Fallback: open web URL
-  await Linking.openURL(url);
-  return `📱 Đã mở ${label} trên trình duyệt`;
+  // 2. Try {appName}:// scheme — let OS resolve
+  if (cleanName) {
+    try {
+      const scheme = `${cleanName}://`;
+      const canOpen = await Linking.canOpenURL(scheme).catch(() => false);
+      if (canOpen) {
+        await Linking.openURL(scheme);
+        return `📱 Đã mở ${label}`;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 3. Last resort: open web URL (browser or OS App Links)
+  const webUrl = isWebUrl ? actionUrl : (cleanName ? `https://www.${cleanName}.com` : null);
+  if (webUrl) {
+    try {
+      await Linking.openURL(webUrl);
+      return `📱 Đã mở ${label} trên trình duyệt`;
+    } catch { /* ignore */ }
+  }
+
+  return `📱 Không tìm thấy app ${label}`;
 }
 
 /** Initiate a phone call */
